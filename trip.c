@@ -1,24 +1,47 @@
 #include <openssl/sha.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <byteswap.h>
 
 char *trip(char *input, size_t len) {
 	static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 		"abcdefghijklmnopqrstuvwxyz0123456789+/";
 	static char trip[11];
-	static unsigned char hash[SHA512_DIGEST_LENGTH];
-	
-	SHA512((unsigned char *)input, len, hash);
-	// get first 10 chars of base64
-	trip[0]=b64[                  hash[0]>>2];
-	trip[1]=b64[(hash[0]& 3)<<4 | hash[1]>>4];
-	trip[2]=b64[(hash[1]&15)<<2 | hash[2]>>6];
-	trip[3]=b64[ hash[2]&63                 ];
-	trip[4]=b64[                  hash[3]>>2];
-	trip[5]=b64[(hash[3]& 3)<<4 | hash[4]>>4];
-	trip[6]=b64[(hash[4]&15)<<2 | hash[5]>>6];
-	trip[7]=b64[ hash[5]&63                 ];
-	trip[8]=b64[                  hash[6]>>2];
-	trip[9]=b64[(hash[6]& 3)<<4 | hash[7]>>4];
+	static uint64_t hash[SHA512_DIGEST_LENGTH/sizeof(uint64_t)];
+	static SHA512_CTX c;
+	SHA512_Init(&c);
+	SHA512_Update(&c, input, len);
+	SHA512_Final((unsigned char *)hash, &c);
+#ifdef _CPU_BIG_ENDIAN
+	uint64_t hash64 = *hash;
+#else
+	uint64_t hash64 = bswap_64(*hash);
+#endif
+	int i;
+	for(i=0;i<10;i++)
+		trip[i]=b64[hash64>>(58-i*6) & 63];
 	trip[10]=0;
-	
+	return trip;
+}
+
+// Identical to `trip`, except outputs in all lowercase
+char *trip_lower(char *input, size_t len) {
+	static const char b64[] = "abcdefghijklmnopqrstuvwxyz"
+		"abcdefghijklmnopqrstuvwxyz0123456789+/";
+	static char trip[11];
+	static uint64_t hash[SHA512_DIGEST_LENGTH/sizeof(uint64_t)];
+	static SHA512_CTX c;
+	SHA512_Init(&c);
+	SHA512_Update(&c, input, len);
+	SHA512_Final((unsigned char *)hash, &c);
+#ifdef _CPU_BIG_ENDIAN
+	uint64_t hash64 = *hash;
+#else
+	uint64_t hash64 = bswap_64(*hash);
+#endif
+	int i;
+	for(i=0;i<10;i++)
+		trip[i]=b64[hash64>>(58-i*6) & 63];
+	trip[10]=0;
 	return trip;
 }
